@@ -1,0 +1,36 @@
+# Ruff 設定（Python linter & formatter）
+# https://docs.astral.sh/ruff/
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src/backend"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line-length は formatter に任せる
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["api", "core", "collectors", "analyzers", "predictors", "models", "services"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["src/backend/tests"]
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
