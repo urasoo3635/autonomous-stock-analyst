@@ -4,11 +4,12 @@ API ルーター集約
 """
 from fastapi import APIRouter
 
-from api.v1 import health, macro, news, stocks
+from api.v1 import analysis, health, macro, news, stocks
 
 router = APIRouter(prefix="/api/v1")
 
 router.include_router(health.router, tags=["ヘルスチェック"])
 router.include_router(stocks.router, tags=["銘柄"])
+router.include_router(analysis.router, tags=["分析・予測"])
 router.include_router(news.router, tags=["ニュース"])
 router.include_router(macro.router, tags=["マクロ経済指標"])

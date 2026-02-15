@@ -23,6 +23,13 @@ yfinance==0.2.51
 feedparser==6.0.11
 fredapi==0.5.2
 
+# --- テクニカル分析・ML ---
+scikit-learn==1.4.0
+pandas-ta==0.3.14b0
+lightgbm==4.3.0
+transformers==4.37.2
+torch==2.2.0 --index-url https://download.pytorch.org/whl/cpu
+
 # --- 設定管理 ---
 pydantic-settings==2.7.1
 
