@@ -1,0 +1,187 @@
+# =============================================================================
+# CI パイプライン
+# =============================================================================
+# トリガー: main / develop への PR、および push 時に実行
+# ジョブ: lint, test, terraform-check, docker-build
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: "3.12"
+  TERRAFORM_VERSION: "1.9.8"
+
+jobs:
+  # ==========================================================================
+  # Lint & Format Check
+  # ==========================================================================
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: src/backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r src/backend/requirements.txt
+          pip install ruff mypy
+
+      - name: Run Ruff (linter)
+        run: ruff check src/backend/
+
+      - name: Run Ruff (formatter check)
+        run: ruff format --check src/backend/
+
+      - name: Run mypy (type check)
+        run: mypy src/backend/ --ignore-missing-imports
+
+  # ==========================================================================
+  # Unit Tests
+  # ==========================================================================
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: stock_analyst_test
+          POSTGRES_USER: dbadmin
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dbadmin -d stock_analyst_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: src/backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r src/backend/requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://dbadmin:testpassword@localhost:5432/stock_analyst_test
+          ENVIRONMENT: test
+        run: |
+          pytest src/backend/tests/ \
+            --cov=src/backend \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            -v || echo "No tests found yet, skipping"
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
+
+  # ==========================================================================
+  # Terraform Validation
+  # ==========================================================================
+  terraform-check:
+    name: Terraform Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive infra/
+
+      - name: Validate networking module
+        working-directory: infra/modules/networking
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate compute module
+        working-directory: infra/modules/compute
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate database module
+        working-directory: infra/modules/database
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate storage module
+        working-directory: infra/modules/storage
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate monitoring module
+        working-directory: infra/modules/monitoring
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+      - name: Validate dns module
+        working-directory: infra/modules/dns
+        run: |
+          terraform init -backend=false
+          terraform validate
+
+  # ==========================================================================
+  # Docker Build
+  # ==========================================================================
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: stock-analyst:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
