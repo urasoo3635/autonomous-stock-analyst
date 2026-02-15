@@ -1,0 +1,6 @@
+# dev 環境用変数テンプレート
+# このファイルをコピーして dev.tfvars を作成し、値を設定してください。
+# cp dev.tfvars.example dev.tfvars
+
+aws_profile = "default"
+db_password = "CHANGE_ME_TO_SECURE_PASSWORD"

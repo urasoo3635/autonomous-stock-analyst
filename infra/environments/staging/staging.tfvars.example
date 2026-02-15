@@ -1,0 +1,7 @@
+# staging 環境用変数テンプレート
+# このファイルをコピーして staging.tfvars を作成し、値を設定してください。
+# cp staging.tfvars.example staging.tfvars
+
+aws_profile = "default"
+db_password = "CHANGE_ME_TO_SECURE_PASSWORD"
+alarm_email = "your-email@example.com"
