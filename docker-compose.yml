@@ -1,20 +1,25 @@
 # =============================================================================
 # ローカル開発用 Docker Compose
 # =============================================================================
-# 使い方: docker-compose up -d
-# 停止:   docker-compose down
-# ログ:   docker-compose logs -f app
+# 使い方:
+#   cp .env.example .env     (初回のみ)
+#   docker-compose up -d     起動
+#   docker-compose logs -f   ログ確認
+#   docker-compose down      停止
+#   docker-compose exec backend alembic upgrade head   DBマイグレーション実行
 
 services:
-  # --- バックエンド API ---
-  app:
+  # --- バックエンド API (開発用) ---
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
-      target: production
-    container_name: stock-analyst-app
+      target: development     # 開発用ステージ (ホットリロード有効)
+    container_name: stock-analyst-backend
     ports:
       - "8000:8000"
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://dbadmin:devpassword@db:5432/stock_analyst
       - ENVIRONMENT=dev
@@ -23,8 +28,24 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ./src/backend:/app  # ホットリロード用
-    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+      - ./src/backend:/app    # ホットリロード用マウント
+    restart: unless-stopped
+
+  # --- フロントエンド (開発用) ---
+  frontend:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile
+    container_name: stock-analyst-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src/frontend:/app
+      - /app/node_modules      # node_modules はコンテナ内のものを使用
+    environment:
+      - VITE_API_URL=/api/v1
+    depends_on:
+      - backend
     restart: unless-stopped
 
   # --- PostgreSQL ---

@@ -1,0 +1,88 @@
+name: CD
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  AWS_REGION: ap-northeast-1
+  ECR_REPOSITORY_BACKEND: stock-analyst-prod-backend
+  ECR_REPOSITORY_FRONTEND: stock-analyst-prod-frontend
+  ECS_CLUSTER: stock-analyst-prod-cluster
+  ECS_SERVICE_BACKEND: stock-analyst-prod-service
+  CONTAINER_NAME_BACKEND: stock-analyst-app
+
+# OIDC 認証に必要な権限
+permissions:
+  id-token: write   # OIDC トークン取得に必要
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # OIDC を使用してキーレスで AWS 認証（アクセスキーが不要）
+    - name: Configure AWS credentials (OIDC)
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        role-session-name: github-actions-deploy-${{ github.sha }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, tag, and push Backend image to Amazon ECR
+      id: build-backend
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build \
+          --target production \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:latest \
+          -f Dockerfile .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:latest
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Build, tag, and push Frontend image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        docker build \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:latest \
+          -f src/frontend/Dockerfile src/frontend
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:latest
+
+    - name: Download task definition
+      run: |
+        aws ecs describe-task-definition \
+          --task-definition stock-analyst-prod-app \
+          --query taskDefinition \
+          > task-definition.json
+
+    - name: Fill in the new image ID in the Amazon ECS task definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: task-definition.json
+        container-name: ${{ env.CONTAINER_NAME_BACKEND }}
+        image: ${{ steps.build-backend.outputs.image }}
+
+    - name: Deploy Amazon ECS task definition
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: ${{ env.ECS_SERVICE_BACKEND }}
+        cluster: ${{ env.ECS_CLUSTER }}
+        wait-for-service-stability: true

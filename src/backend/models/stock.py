@@ -4,6 +4,7 @@
 from datetime import date
 from decimal import Decimal
 
+import sqlalchemy as sa
 from sqlalchemy import Date, Index, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -41,7 +42,7 @@ class StockPrice(Base, TimestampMixin):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    stock_id: Mapped[int] = mapped_column(nullable=False)
+    stock_id: Mapped[int] = mapped_column(sa.ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False)
     price_date: Mapped[date] = mapped_column(Date, nullable=False)
     open: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     high: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)

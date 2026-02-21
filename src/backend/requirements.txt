@@ -5,6 +5,7 @@
 # --- Web フレームワーク ---
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
+slowapi==0.1.9
 
 # --- データベース ---
 sqlalchemy[asyncio]==2.0.36

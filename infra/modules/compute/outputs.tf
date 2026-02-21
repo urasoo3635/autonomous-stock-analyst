@@ -22,6 +22,13 @@ output "app_security_group_id" {
   description = "アプリケーションセキュリティグループ ID"
   value       = aws_security_group.app.id
 }
+output "ecr_repository_backend_url" {
+  value = aws_ecr_repository.backend.repository_url
+}
+
+output "ecr_repository_frontend_url" {
+  value = aws_ecr_repository.frontend.repository_url
+}
 
 output "target_group_arn" {
   description = "ターゲットグループ ARN"
